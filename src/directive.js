@@ -1,5 +1,3 @@
-const ctx = '@@InfiniteScroll';
-
 var throttle = function (fn, delay) {
   var now, lastExec, timer, context, args; //eslint-disable-line
 
@@ -24,7 +22,7 @@ var throttle = function (fn, delay) {
       if (diff < 0) {
         execute();
       } else {
-        timer = setTimeout(() => {
+        timer = setTimeout(function () {
           execute();
         }, diff);
       }
@@ -86,121 +84,111 @@ var isAttached = function (element) {
   return false;
 };
 
-var doBind = function () {
-  if (this.binded) return; // eslint-disable-line
-  this.binded = true;
-
-  var directive = this;
-  var element = directive.el;
-
-  directive.scrollEventTarget = getScrollEventTarget(element);
-  directive.scrollListener = throttle(doCheck.bind(directive), 200);
-  directive.scrollEventTarget.addEventListener('scroll', directive.scrollListener);
-
-  this.vm.$on('hook:beforeDestroy', function () {
-    directive.scrollEventTarget.removeEventListener('scroll', directive.scrollListener);
-  });
-
-  var disabledExpr = element.getAttribute('infinite-scroll-disabled');
-  var disabled = false;
-
-  if (disabledExpr) {
-    this.vm.$watch(disabledExpr, function(value) {
-      directive.disabled = value;
-      if (!value && directive.immediateCheck) {
-        doCheck.call(directive);
-      }
-    });
-    disabled = Boolean(directive.vm[disabledExpr]);
-  }
-  directive.disabled = disabled;
-
-  var distanceExpr = element.getAttribute('infinite-scroll-distance');
-  var distance = 0;
-  if (distanceExpr) {
-    distance = Number(directive.vm[distanceExpr] || distanceExpr);
-    if (isNaN(distance)) {
-      distance = 0;
-    }
-  }
-  directive.distance = distance;
-
-  var immediateCheckExpr = element.getAttribute('infinite-scroll-immediate-check');
-  var immediateCheck = true;
-  if (immediateCheckExpr) {
-    immediateCheck = Boolean(directive.vm[immediateCheckExpr]);
-  }
-  directive.immediateCheck = immediateCheck;
-
-  if (immediateCheck) {
-    doCheck.call(directive);
-  }
-
-  var eventName = element.getAttribute('infinite-scroll-listen-for-event');
-  if (eventName) {
-    directive.vm.$on(eventName, function() {
-      doCheck.call(directive);
-    });
-  }
-};
-
-var doCheck = function (force) {
-  var scrollEventTarget = this.scrollEventTarget;
-  var element = this.el;
-  var distance = this.distance;
-
-  if (force !== true && this.disabled) return; //eslint-disable-line
-  var viewportScrollTop = getScrollTop(scrollEventTarget);
-  var viewportBottom = viewportScrollTop + getVisibleHeight(scrollEventTarget);
-
-  var shouldTrigger = false;
-
-  if (scrollEventTarget === element) {
-    shouldTrigger = scrollEventTarget.scrollHeight - viewportBottom <= distance;
-  } else {
-    var elementBottom = getElementTop(element) - getElementTop(scrollEventTarget) + element.offsetHeight + viewportScrollTop;
-
-    shouldTrigger = viewportBottom + distance >= elementBottom;
-  }
-
-  if (shouldTrigger && this.expression) {
-    this.expression();
-  }
-};
-
 export default {
-  bind(el, binding, vnode) {
-    el[ctx] = {
-      el,
-      vm: vnode.context,
-      expression: binding.value
-    };
-    const args = arguments;
-    el[ctx].vm.$on('hook:mounted', function () {
-      el[ctx].vm.$nextTick(function () {
-        if (isAttached(el)) {
-          doBind.call(el[ctx], args);
+  doBind: function () {
+    if (this.binded) return; // eslint-disable-line
+    this.binded = true;
+
+    var directive = this;
+    var element = directive.el;
+
+    directive.scrollEventTarget = getScrollEventTarget(element);
+    directive.scrollListener = throttle(directive.doCheck.bind(directive), 200);
+    directive.scrollEventTarget.addEventListener('scroll', directive.scrollListener);
+
+    var disabledExpr = element.getAttribute('infinite-scroll-disabled');
+    var disabled = false;
+
+    if (disabledExpr) {
+      this.vm.$watch(disabledExpr, function (value) {
+        directive.disabled = value;
+        if (!value && directive.immediateCheck) {
+          directive.doCheck();
         }
-
-        el[ctx].bindTryCount = 0;
-
-        var tryBind = function () {
-          if (el[ctx].bindTryCount > 10) return; //eslint-disable-line
-          el[ctx].bindTryCount++;
-          if (isAttached(el)) {
-            doBind.call(el[ctx], args);
-          } else {
-            setTimeout(tryBind, 50);
-          }
-        };
-
-        tryBind();
       });
-    });
+      disabled = Boolean(directive.vm.$get(disabledExpr));
+    }
+    directive.disabled = disabled;
+
+    var distanceExpr = element.getAttribute('infinite-scroll-distance');
+    var distance = 0;
+    if (distanceExpr) {
+      distance = Number(directive.vm.$get(distanceExpr));
+      if (isNaN(distance)) {
+        distance = 0;
+      }
+    }
+    directive.distance = distance;
+
+    var immediateCheckExpr = element.getAttribute('infinite-scroll-immediate-check');
+    var immediateCheck = true;
+    if (immediateCheckExpr) {
+      immediateCheck = Boolean(directive.vm.$get(immediateCheckExpr));
+    }
+    directive.immediateCheck = immediateCheck;
+
+    if (immediateCheck) {
+      directive.doCheck();
+    }
+
+    var eventName = element.getAttribute('infinite-scroll-listen-for-event');
+    if (eventName) {
+      directive.vm.$on(eventName, function () {
+        directive.doCheck();
+      });
+    }
   },
 
-  unbind(el) {
-    if (el && el[ctx] && el[ctx].scrollEventTarget)
-      el[ctx].scrollEventTarget.removeEventListener('scroll', el[ctx].scrollListener);
+  doCheck: function (force) {
+    var scrollEventTarget = this.scrollEventTarget;
+    var element = this.el;
+    var distance = this.distance;
+
+    if (force !== true && this.disabled) return; //eslint-disable-line
+    var viewportScrollTop = getScrollTop(scrollEventTarget);
+    var viewportBottom = viewportScrollTop + getVisibleHeight(scrollEventTarget);
+
+    var shouldTrigger = false;
+
+    if (scrollEventTarget === element) {
+      shouldTrigger = scrollEventTarget.scrollHeight - viewportBottom <= distance;
+    } else {
+      var elementBottom = getElementTop(element) - getElementTop(scrollEventTarget) + element.offsetHeight + viewportScrollTop;
+
+      shouldTrigger = viewportBottom + distance >= elementBottom;
+    }
+
+    if (shouldTrigger && this.expression) {
+      this.vm.$get(this.expression);
+    }
+  },
+
+  bind: function () {
+    var directive = this;
+    var element = this.el;
+
+    directive.vm.$on('hook:ready', function () {
+      if (isAttached(element)) {
+        directive.doBind();
+      }
+    });
+
+    this.bindTryCount = 0;
+
+    var tryBind = function () {
+      if (directive.bindTryCount > 10) return; //eslint-disable-line
+      directive.bindTryCount++;
+      if (isAttached(element)) {
+        directive.doBind();
+      } else {
+        setTimeout(tryBind, 50);
+      }
+    };
+
+    tryBind();
+  },
+
+  unbind: function () {
+    this.scrollEventTarget.removeEventListener('scroll', this.scrollListener);
   }
 };
