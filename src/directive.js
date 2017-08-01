@@ -159,7 +159,7 @@ export default {
     }
 
     if (shouldTrigger && this.expression) {
-      this.vm.$get(this.expression);
+      this.vm.$get(this.expression)();
     }
   },
 
